@@ -5,13 +5,11 @@
 
 #define Max(a,b) ((a)>(b)?(a):(b))
 
-// --- Датасеты (как в posl.c) ---
 #define SMALL_N       128
 #define MEDIUM_N      256
 #define LARGE_N       512
 #define EXTRALARGE_N  1024
 
-// Итерации (синхронизируй с posl.c при желании)
 #define SMALL_TSTEPS      20
 #define MEDIUM_TSTEPS     40
 #define LARGE_TSTEPS      20
@@ -19,7 +17,6 @@
 
 static const float maxeps = 0.1e-7f;
 
-// init: порядок i-j-k (k внутри) — кэш-френдли
 static void init(int n, float (*A)[n][n], float (*B)[n][n])
 {
     for (int i = 0; i < n; ++i)
@@ -34,7 +31,7 @@ static void init(int n, float (*A)[n][n], float (*B)[n][n])
             }
 }
 
-// verify — вне таймера
+
 static void verify(int n, const float (*A)[n][n])
 {
     double s = 0.0;
@@ -64,7 +61,6 @@ static double kernel_jacobi_3d_for(int n, int itmax)
 
     double t0 = omp_get_wtime();
 
-    // ВАЖНО: один parallel-регион на всё время (меньше overhead, как на лекциях)
     #pragma omp parallel default(none) shared(A,B,n,itmax,inv_12,eps)
     {
         for (int it = 1; it <= itmax; ++it) {
@@ -73,9 +69,7 @@ static double kernel_jacobi_3d_for(int n, int itmax)
             #pragma omp single
             eps = 0.0f;
 
-            // ---- RELAX ----
-            // Не используем collapse(3): оставляем k внутренним для векторизации/локальности
-            // collapse(2) здесь уместен: распределяем плоскости (i,j) по нитям, k внутри.
+            // collapse(2) распределяем плоскости (i,j) по нитям, k внутри
             #pragma omp for collapse(2) schedule(static)
             for (int i = 2; i <= n - 3; ++i)
                 for (int j = 2; j <= n - 3; ++j)
@@ -91,9 +85,7 @@ static double kernel_jacobi_3d_for(int n, int itmax)
                         B[i][j][k] = sum * inv_12;
                     }
 
-            // ---- RESID ----
-            // Корректная область: 2..n-3 (радиус 2!)
-            // Редукция max по eps — один раз на итерацию, без лишних критсекций
+
             #pragma omp for collapse(2) schedule(static) reduction(max:eps)
             for (int i = 2; i <= n - 3; ++i)
                 for (int j = 2; j <= n - 3; ++j)
