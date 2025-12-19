@@ -5,13 +5,11 @@
 
 #define Max(a,b) ((a)>(b)?(a):(b))
 
-// --- Датасеты (как в posl.c) ---
 #define SMALL_N       128
 #define MEDIUM_N      256
 #define LARGE_N       512
 #define EXTRALARGE_N  1024
 
-// Итерации (синхронизируй с posl.c при желании)
 #define SMALL_TSTEPS      20
 #define MEDIUM_TSTEPS     40
 #define LARGE_TSTEPS      20
@@ -45,12 +43,11 @@ static void verify(int n, const float (*A)[n][n])
     printf("S = %.10f\n", s);
 }
 
-// Подбор размера блока по i так, чтобы задач было ~ 8 * threads (не тысячи!)
 static int choose_block_i(int n, int threads)
 {
     int inner = n - 4; // область i=2..n-3 имеет длину n-4
     int target_tasks = 8 * threads;
-    int bi = (inner + target_tasks - 1) / target_tasks; // ceil
+    int bi = (inner + target_tasks - 1) / target_tasks; 
     if (bi < 2) bi = 2;
     return bi;
 }
@@ -83,7 +80,7 @@ static double kernel_jacobi_3d_task(int n, int itmax)
             #pragma omp single
             eps = 0.0f;
 
-            // -------- RELAX phase: задачи по блокам i --------
+            // задачи по блокам i 
             #pragma omp single
             {
                 for (int i0 = 2; i0 <= n - 3; i0 += bi) {
@@ -110,7 +107,7 @@ static double kernel_jacobi_3d_task(int n, int itmax)
                 #pragma omp taskwait
             }
 
-            // -------- RESID phase: задачи по блокам i --------
+            // задачи по блокам i 
             #pragma omp single
             {
                 for (int i0 = 2; i0 <= n - 3; i0 += bi) {
@@ -129,7 +126,7 @@ static double kernel_jacobi_3d_task(int n, int itmax)
                                     local_eps = Max(local_eps, e);
                                 }
 
-                        // одна критсекция на задачу (задач мало => overhead адекватный)
+                        // одна критсекция на задачу
                         #pragma omp critical
                         {
                             eps = Max(eps, local_eps);
