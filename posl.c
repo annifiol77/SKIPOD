@@ -10,14 +10,12 @@
 #define LARGE_N       512
 #define EXTRALARGE_N  1024
 
-// Итерации (стартовые, быстрые)
 #define SMALL_TSTEPS      20
 #define MEDIUM_TSTEPS     20
 #define LARGE_TSTEPS      15
 #define EXTRALARGE_TSTEPS  6 // больше  слишком долго
 static const float maxeps = 0.1e-7f;
 
-// init: k самый внутренний — кэш-френдли
 static void init(int n, float (*A)[n][n], float (*B)[n][n])
 {
     for (int i = 0; i < n; ++i)
@@ -32,7 +30,6 @@ static void init(int n, float (*A)[n][n], float (*B)[n][n])
             }
 }
 
-// relax: stencil радиуса 2 => считаем только 2..n-3
 static void relax(int n, const float (*A)[n][n], float (*B)[n][n])
 {
     const float inv_12 = 1.0f / 12.0f;
@@ -53,7 +50,6 @@ static void relax(int n, const float (*A)[n][n], float (*B)[n][n])
             }
 }
 
-// resid: ВАЖНО — обновляем A и eps только там, где B реально вычислен (2..n-3)
 static float resid(int n, float (*A)[n][n], const float (*B)[n][n])
 {
     float local_eps = 0.0f;
@@ -83,18 +79,7 @@ static void verify(int n, const float (*A)[n][n])
     printf("S = %.10f\n", s);
 }
 
-/*
-  usage:
-    ./posl <dataset_id> [mode]
-  dataset_id:
-    1 -> SMALL
-    2 -> MEDIUM
-    3 -> LARGE
-    4 -> EXTRALARGE
-  mode:
-    fixed  -> ровно itmax итераций (для сравнения -O*)
-    conv   -> остановка по eps < maxeps
-*/
+
 int main(int argc, char **argv)
 {
     int dataset = (argc > 1) ? atoi(argv[1]) : 1;
@@ -127,13 +112,13 @@ int main(int argc, char **argv)
     double t0 = omp_get_wtime();
     float eps = 0.0f;
 
-    if (mode[0] == 'c') { // conv
+    if (mode[0] == 'c') { 
         for (int it = 1; it <= itmax; ++it) {
             relax(n, A, B);
             eps = resid(n, A, B);
             if (eps < maxeps) break;
         }
-    } else { // fixed
+    } else { 
         for (int it = 1; it <= itmax; ++it) {
             relax(n, A, B);
             eps = resid(n, A, B);
@@ -145,7 +130,6 @@ int main(int argc, char **argv)
     printf("Dataset: %s (n=%d, itmax=%d, mode=%s)\n", dataset_name, n, itmax, mode);
     printf("Final eps = %.10e\n", eps);
 
-    // строка для парсинга скриптами
     printf("TOTAL_TIME_SEC: %.6f\n", (t1 - t0));
 
     verify(n, A);
