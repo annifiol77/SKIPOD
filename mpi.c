@@ -6,13 +6,11 @@
 
 #define Max(a,b) ((a)>(b)?(a):(b))
 
-// --- Датасеты (как ты использовала в posl/for/task) ---
 #define SMALL_N       128
 #define MEDIUM_N      256
 #define LARGE_N       512
 #define EXTRALARGE_N  1024
 
-// --- Число итераций для fixed-режима (можешь синхронизировать с posl.c) ---
 #define SMALL_TSTEPS       20
 #define MEDIUM_TSTEPS      20
 #define LARGE_TSTEPS       15
@@ -20,7 +18,6 @@
 
 static const float maxeps = 0.1e-7f;
 
-// Удобная печать только на rank 0
 static void p0(int rank, const char *fmt, ...)
 {
     if (rank != 0) return;
@@ -30,15 +27,12 @@ static void p0(int rank, const char *fmt, ...)
     va_end(ap);
 }
 
-// Инициализация: каждый MPI-процесс заполняет только свой диапазон i
-// Глобальные индексы i_global = start_i .. end_i
-// Локальная раскладка: local i = 0..local_n-1 храним в A[H+i] где H=2 (halo)
+
 static void init_local(int n, int start_i, int local_n,
                        float *A, float *B)
 {
     const int H = 2;
-    const size_t plane = (size_t)n * (size_t)n; // j*k
-    // Обнуляем всё, включая halo
+    const size_t plane = (size_t)n * (size_t)n; 
     memset(A, 0, (size_t)(local_n + 2*H) * plane * sizeof(float));
     memset(B, 0, (size_t)(local_n + 2*H) * plane * sizeof(float));
 
@@ -57,8 +51,7 @@ static void init_local(int n, int start_i, int local_n,
     }
 }
 
-// Обмен halo толщиной 2 с соседями по i (левый/правый)
-// Отправляем/получаем 2 плоскости j*k
+
 static void exchange_halo(int n, int rank, int size,
                           int local_n, float *A)
 {
@@ -67,28 +60,24 @@ static void exchange_halo(int n, int rank, int size,
     const int left  = (rank == 0) ? MPI_PROC_NULL : rank - 1;
     const int right = (rank == size - 1) ? MPI_PROC_NULL : rank + 1;
 
-    // Указатели на 2 "реальных" первых/последних слоёв
-    float *send_left  = A + (size_t)H * plane;                     // слой i_local=0 (в A[H])
-    float *send_right = A + (size_t)(H + local_n - 2) * plane;     // слой i_local=local_n-2 (первый из последних двух)
+    float *send_left  = A + (size_t)H * plane;                     
+    float *send_right = A + (size_t)(H + local_n - 2) * plane;  
 
-    // Указатели на halo области (2 слоя слева и 2 справа)
     float *recv_left  = A + (size_t)0 * plane;                     // A[0], A[1]
     float *recv_right = A + (size_t)(H + local_n) * plane;         // A[H+local_n], A[H+local_n+1]
 
-    // Обмен делаем через Sendrecv: безопасно и просто
-    // 1) Обмен "двух первых слоёв" -> левому, получаем "две правые halo" от правого
+
     MPI_Sendrecv(send_left,  (int)(2 * plane), MPI_FLOAT, left,  100,
                  recv_right, (int)(2 * plane), MPI_FLOAT, right, 100,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    // 2) Обмен "двух последних слоёв" -> правому, получаем "две левые halo" от левого
+
     MPI_Sendrecv(send_right, (int)(2 * plane), MPI_FLOAT, right, 200,
                  recv_left,  (int)(2 * plane), MPI_FLOAT, left,  200,
                  MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 }
 
-// Jacobi-relax: считаем B по A (используем halo)
-// Важно: li от 0..local_n-1 соответствует глобальному i=start_i+li
+
 static void relax_local(int n, int start_i, int local_n,
                         const float *A, float *B)
 {
@@ -98,7 +87,6 @@ static void relax_local(int n, int start_i, int local_n,
 
     for (int li = 0; li < local_n; ++li) {
         int i = start_i + li;
-        // Глобальные границы по i не обновляем
         if (i < 2 || i > n - 3) continue;
 
         const float *Am = A + (size_t)(H + li) * plane; // центр
@@ -109,14 +97,12 @@ static void relax_local(int n, int start_i, int local_n,
                 // Индекс в плоскости
                 size_t idx = (size_t)j * n + k;
 
-                // Соседи по j/k в той же плоскости
                 float s =
                     Am[idx - 1] + Am[idx + 1] +
                     Am[idx - n] + Am[idx + n] +
                     Am[idx - 2] + Am[idx + 2] +
                     Am[idx - 2 * n] + Am[idx + 2 * n];
 
-                // Соседи по i: берем из соседних плоскостей (через halo)
                 const float *A_im1 = A + (size_t)(H + li - 1) * plane;
                 const float *A_ip1 = A + (size_t)(H + li + 1) * plane;
                 const float *A_im2 = A + (size_t)(H + li - 2) * plane;
@@ -130,7 +116,6 @@ static void relax_local(int n, int start_i, int local_n,
     }
 }
 
-// resid: A = B, eps = max|A-B| на локальном блоке (без глобальных границ)
 static float resid_local(int n, int start_i, int local_n,
                          float *A, const float *B)
 {
@@ -157,7 +142,6 @@ static float resid_local(int n, int start_i, int local_n,
     return local_eps;
 }
 
-// verify: считаем сумму по локальному блоку и делаем Reduce(SUM)
 static double verify_local(int n, int start_i, int local_n,
                            const float *A)
 {
@@ -179,7 +163,6 @@ static double verify_local(int n, int start_i, int local_n,
     return s;
 }
 
-// Разбиение i по процессам: блочное, с “хвостом” на первые ranks
 static void split_1d(int n, int rank, int size, int *start_i, int *local_n)
 {
     int base = n / size;
@@ -240,24 +223,18 @@ int main(int argc, char **argv)
 
     float eps = 0.0f;
     for (int it = 1; it <= itmax; ++it) {
-        // 1) Обновить halo для A
         exchange_halo(n, rank, size, local_n, A);
 
-        // 2) Посчитать B из A
         relax_local(n, start_i, local_n, A, B);
 
-        // 3) eps и копирование A=B (локально)
         float local_eps = resid_local(n, start_i, local_n, A, B);
 
-        // 4) глобальный eps = max по всем процессам
         MPI_Allreduce(&local_eps, &eps, 1, MPI_FLOAT, MPI_MAX, MPI_COMM_WORLD);
 
         if (rank == 0 && (it == 1 || it == itmax || (it % 5 == 0))) {
             printf("it=%4d   eps=%e\n", it, (double)eps);
         }
 
-        // В режиме не-fixed можно было бы сделать ранний выход по eps
-        // Но для честных замеров лучше fixed.
         if (strcmp(mode, "fixed") != 0) {
             if (eps < maxeps) break;
         }
