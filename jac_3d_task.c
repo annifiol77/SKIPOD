@@ -45,7 +45,7 @@ static void verify(int n, const float (*A)[n][n])
 
 static int choose_block_i(int n, int threads)
 {
-    int inner = n - 4; // область i=2..n-3 имеет длину n-4
+    int inner = n - 4; // обл i=2..n-3 имеет длину n-4
     int target_tasks = 8 * threads;
     int bi = (inner + target_tasks - 1) / target_tasks; 
     if (bi < 2) bi = 2;
@@ -69,7 +69,7 @@ static double kernel_jacobi_3d_task(int n, int itmax)
 
     double t0 = omp_get_wtime();
 
-    // Один parallel-регион, внутри него single порождает задачи
+    // 1 parallel-регион, внутри него single порождает задачи
     #pragma omp parallel default(none) shared(A,B,n,itmax,inv_12,eps)
     {
         int threads = omp_get_num_threads();
