@@ -69,7 +69,7 @@ static double kernel_jacobi_3d_task(int n, int itmax)
 
     double t0 = omp_get_wtime();
 
-    // 1 parallel-регион, внутри него single порождает задачи
+    // 1 parallel-регион
     #pragma omp parallel default(none) shared(A,B,n,itmax,inv_12,eps)
     {
         int threads = omp_get_num_threads();
@@ -126,7 +126,7 @@ static double kernel_jacobi_3d_task(int n, int itmax)
                                     local_eps = Max(local_eps, e);
                                 }
 
-                        // одна критсекция на задачу
+                        // одна критсекция на задач
                         #pragma omp critical
                         {
                             eps = Max(eps, local_eps);
